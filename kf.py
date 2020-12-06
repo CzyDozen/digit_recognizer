@@ -148,7 +148,7 @@ def predictions(num_model, conv, loss):
     test_preds = torch.LongTensor() 
     for i, data in enumerate(test_loader):
         data = data.unsqueeze(1)
-        output = conv[0](data) * (0.1-loss[0])
+        output = conv[0](data) * (0.02-loss[0])
         for idx in range(1, num_model):
             output = output + conv[idx](data) * (0.02-loss[idx])
         preds = output.cpu().data.max(1, keepdim=True)[1]
