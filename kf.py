@@ -1,16 +1,11 @@
 import torch
-from torch.utils.data import DataLoader, TensorDataset
-
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
 
 import pandas as pd
 from sklearn.model_selection import train_test_split, StratifiedKFold
-
-train_df = pd.read_csv("train.csv")
-train_labels = train_df['label'].values
-train_images = (train_df.iloc[:,1:].values).astype('float32')
 
 class LN5(nn.Module):
     def __init__(self):
@@ -83,69 +78,98 @@ def evaluate(num_epoch, data_loader, conv_model):
     print('{} Average Val Loss: {:.4f}, Val Accuracy: {}/{} ({:.3f}%)'.format(
         num_epoch, loss, correct, len(data_loader.dataset),
         100. * correct / len(data_loader.dataset)))
+    return loss
 
+def kfold(num_model, num_epochs, conv, train_images, train_labels):
+    kf = StratifiedKFold(n_splits=num_model, shuffle=True, random_state=123)
+    criterion = nn.CrossEntropyLoss()
+
+    for k, (tr_idx, val_idx) in enumerate(kf.split(train_images, train_labels)):
+        
+        print('start model {}'.format(k))
+        
+        conv_model = LN5()
+        optimizer = optim.Adam(params=conv_model.parameters(), lr=0.005)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+
+        tt_images = train_images[tr_idx]
+        tt_labels = train_labels[tr_idx]
+        val_images = train_images[val_idx]
+        val_labels = train_labels[val_idx]
+
+        tt_images = tt_images.reshape(tt_images.shape[0], 28, 28)
+        tt_images_tensor = torch.tensor(tt_images)/255.0
+        tt_labels_tensor = torch.tensor(tt_labels)
+        tt_tensor = TensorDataset(tt_images_tensor, tt_labels_tensor)
+        tt_loader = DataLoader(tt_tensor, batch_size=420, shuffle=True)
+
+        val_images = val_images.reshape(val_images.shape[0], 28, 28)
+        val_images_tensor = torch.tensor(val_images)/255.0
+        val_labels_tensor = torch.tensor(val_labels)
+        val_tensor = TensorDataset(val_images_tensor, val_labels_tensor)
+        val_loader = DataLoader(val_tensor, batch_size=420, shuffle=True)
+
+        for n in range(num_epochs):
+            train_model(tt_loader, conv_model, optimizer, scheduler, criterion)
+            evaluate(n, val_loader, conv_model)
+
+        torch.save(conv_model.state_dict(), 'conv_{}_{}_[{}].pkl'.format(num_model,num_epochs,k))
+        # net.load_state_dict(torch.load('net_params.pkl'))
+        
+        conv.append(conv_model)
+
+def load_pkl(num_model, num_epochs, conv):
+    for k in range(num_model):
+        conv_model = LN5()
+        conv_model.load_state_dict(torch.load('conv_{}_{}_[{}].pkl'.format(num_model,num_epochs,k)))
+        conv.append(conv_model)
+
+def total_loss(num_model, conv, train_images, train_labels):
+    train_images = train_images.reshape(train_images.shape[0], 28, 28)
+    train_images_tensor = torch.tensor(train_images)/255.0
+    train_labels_tensor = torch.tensor(train_labels)
+    train_tensor = TensorDataset(train_images_tensor, train_labels_tensor)
+    train_loader = DataLoader(train_tensor, batch_size=420, shuffle=True)
+
+    loss = []
+    for k in range(num_model):
+        loss.append(evaluate(-1, train_loader, conv[k]))
+    return loss
+
+def predictions(num_model, conv, loss):
+    for idx in range(num_model):
+        conv[idx].eval()
+    test_df = pd.read_csv("test.csv")
+    test_images = (test_df.iloc[:,:].values).astype('float32')
+    test_images = test_images.reshape(test_images.shape[0], 28, 28)
+    test_images_tensor = torch.tensor(test_images)/255.0
+    test_loader = DataLoader(test_images_tensor, batch_size=280, shuffle=False)
+    
+    test_preds = torch.LongTensor() 
+    for i, data in enumerate(test_loader):
+        data = data.unsqueeze(1)
+        output = conv[0](data) * (0.1-loss[0])
+        for idx in range(1, num_model):
+            output = output + conv[idx](data) * (0.02-loss[idx])
+        preds = output.cpu().data.max(1, keepdim=True)[1]
+        test_preds = torch.cat((test_preds, preds), dim=0)
+    
+    submission_df = pd.read_csv("sample_submission.csv")
+    submission_df['Label'] = test_preds.numpy().squeeze()
+    submission_df.head()
+    submission_df.to_csv('submission.csv', index=False)
+
+train_df = pd.read_csv("train.csv")
+train_labels = train_df['label'].values
+train_images = (train_df.iloc[:,1:].values).astype('float32')
 num_model = 10
 num_epochs = 100
 conv = []
 
-kf = StratifiedKFold(n_splits=num_model, shuffle=True, random_state=123)
-criterion = nn.CrossEntropyLoss()
-
-for k, (tr_idx, val_idx) in enumerate(kf.split(train_images, train_labels)):
-    
-    print('start model {}'.format(k))
-    
-    conv_model = LN5()
-    optimizer = optim.Adam(params=conv_model.parameters(), lr=0.005)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
-
-    tt_images = train_images[tr_idx]
-    tt_labels = train_labels[tr_idx]
-    val_images = train_images[val_idx]
-    val_labels = train_labels[val_idx]
-
-    tt_images = tt_images.reshape(tt_images.shape[0], 28, 28)
-    tt_images_tensor = torch.tensor(tt_images)/255.0
-    tt_labels_tensor = torch.tensor(tt_labels)
-    tt_tensor = TensorDataset(tt_images_tensor, tt_labels_tensor)
-    tt_loader = DataLoader(tt_tensor, batch_size=420, shuffle=True)
-
-    val_images = val_images.reshape(val_images.shape[0], 28, 28)
-    val_images_tensor = torch.tensor(val_images)/255.0
-    val_labels_tensor = torch.tensor(val_labels)
-    val_tensor = TensorDataset(val_images_tensor, val_labels_tensor)
-    val_loader = DataLoader(val_tensor, batch_size=420, shuffle=True)
-
-    for n in range(num_epochs):
-        train_model(tt_loader, conv_model, optimizer, scheduler, criterion)
-        evaluate(n, val_loader, conv_model)
-
-    torch.save(conv_model.state_dict(), 'conv[{}].pkl'.format(k))
-    # net.load_state_dict(torch.load('net_params.pkl'))
-    
-    conv.append(conv_model)
-
-def make_predictions(data_loader):
-    conv_model.eval()
-    test_preds = torch.LongTensor()
-    
-    for i, data in enumerate(data_loader):
-        data = data.unsqueeze(1)
-        output = conv[0](data)
-        for idx in range(1, num_model):
-            output = output + conv[idx](data)
-        preds = output.cpu().data.max(1, keepdim=True)[1]
-        test_preds = torch.cat((test_preds, preds), dim=0)
-    return test_preds
-
-test_df = pd.read_csv("test.csv")
-test_images = (test_df.iloc[:,:].values).astype('float32')
-test_images = test_images.reshape(test_images.shape[0], 28, 28)
-test_images_tensor = torch.tensor(test_images)/255.0
-test_loader = DataLoader(test_images_tensor, batch_size=280, shuffle=False)
-test_set_preds = make_predictions(test_loader)
-
-submission_df = pd.read_csv("sample_submission.csv")
-submission_df['Label'] = test_set_preds.numpy().squeeze()
-submission_df.head()
-submission_df.to_csv('submission.csv', index=False)
+"""
+kfold(num_model, num_epochs, conv, train_images, train_labels)
+predictions()
+"""
+load_pkl(num_model, num_epochs, conv)
+loss = total_loss(num_model, conv, train_images, train_labels)
+predictions(num_model, conv, loss)
