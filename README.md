@@ -4,7 +4,7 @@ We group of three designed it, attended the [Kaggle competition](https://www.kag
 
 ---
 
-### File tree  
+### File list  
     - CNN.py: the first net we made, with great number of connections, not so easy to train on PC   
     - LN5.py: based on the LeNet-5 by Yann LeCun, and we did some adaptations   
     - KFold.py: added KFold on LN5 to improve   
