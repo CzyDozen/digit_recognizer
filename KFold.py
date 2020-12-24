@@ -166,10 +166,8 @@ num_model = 10
 num_epochs = 100
 conv = []
 
-"""
-kfold(num_model, num_epochs, conv, train_images, train_labels)
-predictions()
-"""
+# kfold(num_model, num_epochs, conv, train_images, train_labels)
 load_pkl(num_model, num_epochs, conv)
+
 loss = total_loss(num_model, conv, train_images, train_labels)
 predictions(num_model, conv, loss)
