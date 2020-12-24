@@ -1,6 +1,8 @@
+### digit_recognizer
 This is a handwritten digit recognizer based on MNIST.  
 We group of three designed it, attended the [Kaggle competition](https://www.kaggle.com/c/digit-recognizer) and submited it as homework.   
 
+---
 
 ### File tree  
     - CNN.py: the first net we made, with great number of connections, not so easy to train on PC   
