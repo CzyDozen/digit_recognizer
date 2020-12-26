@@ -11,6 +11,7 @@ We group of three designed it, attended the [Kaggle competition](https://www.kag
     
     - log_kf.txt: training accuracy of models in KFold.py, maybe for weight adjustment in the future   
     - presentation.pptx   
+    - report.docx
      
     - conv_10_100.7z: '10' models with '100' episodes trained each   
         │conv_10_100_[0].pkl   
